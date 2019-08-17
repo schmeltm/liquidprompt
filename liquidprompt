@@ -196,12 +196,12 @@ case "$LP_OS" in
             # If you have problems with syntax coloring due to the following
             # line, do this: ln -s liquidprompt liquidprompt.bash
             # and edit liquidprompt.bash
-            read bol lp_cpu_load eol <<<"$( LANG=C sysctl -n vm.loadavg )"
+            read bol lp_cpu_load eol <<<"$( LC_ALL=C sysctl -n vm.loadavg )"
         }
         ;;
     SunOS)
         _lp_cpu_load () {
-            read lp_cpu_load <<<"$( LANG=C uptime | sed 's/.*load average: *\([0-9.]*\).*/\1/' )"
+            read lp_cpu_load <<<"$( LC_ALL=C uptime | sed 's/.*load average: *\([0-9.]*\).*/\1/' )"
         }
 esac
 
@@ -572,7 +572,7 @@ else # root!
     # Disable VCS info for all paths
     if (( ! LP_ENABLE_VCS_ROOT )); then
         LP_DISABLED_VCS_PATH=/
-        LP_MARK_DISABLED="$_LP_MARK_SYMBOL"
+        LP_MARK_DISABLED="$LP_MARK_DEFAULT"
     fi
 fi
 
@@ -593,7 +593,7 @@ _lp_connection()
     else
         # tmux: see GH #304
         # TODO check on *BSD
-        local whoami="$(LANG=C who am i)"
+        local whoami="$(LC_ALL=C who am i)"
         local sess_parent="$(ps -o comm= -p $PPID 2> /dev/null)"
         if [[ x"$whoami" != *'('* || x"$whoami" = *'(:'* || x"$whoami" = *'(tmux'* ]]; then
             echo lcl  # Local
@@ -892,11 +892,12 @@ _lp_git_branch_color()
         local end
         end="${LP_COLOR_CHANGES}$(_lp_git_head_status)${NO_COL}"
 
-        if LC_ALL=C \git status --porcelain 2>/dev/null | \grep -Eq '^\?\?'; then
+        if LC_ALL=C \git status --porcelain 2>/dev/null | \grep -q '^??'; then
             end="$LP_COLOR_CHANGES$LP_MARK_UNTRACKED$end"
         fi
 
-        if [[ -n "$(\git stash list -n 1 2>/dev/null)" ]]; then
+        # Show if there is a git stash
+        if \git rev-parse --verify -q refs/stash >/dev/null; then
             end="$LP_COLOR_COMMITS$LP_MARK_STASH$end"
         fi
 
@@ -1019,7 +1020,7 @@ _lp_hg_branch_color()
 
         local has_untracked
         has_untracked=
-        if hg status -u 2>/dev/null | \grep -q '^\?' >/dev/null ; then
+        if hg status -u 2>/dev/null | \grep -q '^?' >/dev/null ; then
             has_untracked="$LP_COLOR_CHANGES$LP_MARK_UNTRACKED"
         fi
 
@@ -1065,7 +1066,7 @@ _lp_svn_branch()
 
     local root=
     local url=
-    eval "$(LANG=C LC_ALL=C svn info 2>/dev/null | sed -n 's/^URL: \(.*\)/url="\1"/p;s/^Repository Root: \(.*\)/root="\1"/p' )"
+    eval "$(LC_ALL=C svn info 2>/dev/null | sed -n 's/^URL: \(.*\)/url="\1"/p;s/^Repository Root: \(.*\)/root="\1"/p' )"
     [[ -z "${root-}" ]] && return
 
     # Make url relative to root
@@ -1115,11 +1116,11 @@ _lp_fossil_branch()
 {
     (( LP_ENABLE_FOSSIL )) || return
     local branch
-    branch=$(fossil status 2>/dev/null | sed -n -$_LP_SED_EXTENDED 's/^tags:\s+(\w*)$/\1/p')
+    branch=$(fossil branch list 2>/dev/null | sed -n -$_LP_SED_EXTENDED 's/^\*\s+(\w*)$/\1/p')
     if [[ -n "$branch" ]]; then
         echo -nE "$branch"
     elif fossil info &>/dev/null ; then
-        echo -n "no-tag"
+        echo -n "no-branch"
     fi
 }
 
@@ -1521,7 +1522,7 @@ if (( LP_ENABLE_TEMP )); then
     {
         local -i i
         # Only the integer part is retained
-        for i in $(LANG=C acpi -t |
+        for i in $(LC_ALL=C acpi -t |
                 sed 's/.* \(-\?[0-9]*\)\.[0-9]* degrees C$/\1/p'); do
             (( $i > ${temperature:-0} )) && temperature=i
         done
